@@ -1,12 +1,15 @@
 ##########################
-###   MODEL CLASS  ###
+###     MODEL CLASS    ###
 ##########################
 
 from .db_manager import DBManager
 from .record_types import PDFRecord, CSVRecord
-
-### Copied imports from the app file ###
 import csv
+import pandas as pd
+from PyPDF2 import PdfWriter, PdfReader
+import re
+from datetime import datetime
+import os
 
 
 class Model:
@@ -42,14 +45,14 @@ class Model:
 				'cols': 2,
 				'orientation': 'rows',
 				'fixed': 'cols',
-				'labels': ['shipment id', 'shipment name', 'boxes', 'units']
+				'data_labels': ['shipment id', 'shipment name', 'boxes', 'units']
 			},
 			'shipment_data': {
 				'rows': 2,
 				'cols': 3,
 				'orientation': 'cols',
 				'fixed': None,
-				'labels': ['sku', 'total boxes', 'total units', 'box id']
+				'data_labels': ['sku', 'total boxes', 'total units', 'box id']
 			} 
 		}
 
@@ -86,6 +89,9 @@ class Model:
 	def set_shipment_details(self, shipment_details_dict):
 		self._shipment_details = shipment_details_dict
 
+	def set_shipment_data(self, shipment_data_dataframe):
+		self._shipment_data = shipment_data_dataframe
+
 
   ##############  GETTERS  ##################
 	def get_csv_record(self):
@@ -102,6 +108,9 @@ class Model:
 
 	def get_shipment_details(self):
 		return self._shipment_details
+
+	def get_shipment_data(self):
+		return self._shipment_data
 
 	##############  UTILITY METHODS  ################
 
@@ -269,13 +278,29 @@ class Model:
 		matches = []
 		fixed_dim = to_match['fixed']
 
+		# 'shipment_data': {
+		# 	'rows': 2,
+		# 	'cols': 3,
+		# 	'orientation': 'cols',
+		# 	'fixed': None,
+		# 	'data_labels': ['sku', 'total boxes', 'total units', 'box id']
+		# }
+
 		for index, pattern in enumerate(data_patterns):
 			if fixed_dim:
 				if pattern['size'][size[fixed_dim]] == to_match[fixed_dim]:
 					matches.append(pattern)
+			else:
+				rows = pattern['size'][0]
+				cols = pattern['size'][1]
+				# DELETE Test print
+				# print(f"Pattern rows: {rows}, cols: {cols}")
+				if (rows >= to_match['rows']) and (cols >= to_match['cols']):
+					matches.append(pattern)
 		
-		# Right now this only looks for shipment details
+		# Right now this only returns the first match
 		return matches[0]
+
 
 	# Takes an array of data pattern dictionary objects and prints for viewing
 	def print_data_patterns(self, data_patterns):
@@ -286,19 +311,20 @@ class Model:
 			print(f"Ignore flag: {data_patterns[index]['ignore_leading_trailing']}")
 			print(f"------------------------------")
 
+
 	def validate_shipment_details(self, data, data_pattern):
 		
-		labels_array = data_pattern['labels']
+		data_labels_array = data_pattern['data_labels']
 
-		# Initialize labels match to False
+		# Initialize data_labels match to False
 		validate = False
 
-		# Loop through all the labels
-		for label in labels_array:
+		# Loop through all the data_labels
+		for data_label in data_labels_array:
 			match = False
 			# Loop through the keys to see if there is a match
 			for key in data:
-				if key.lower() == label.lower():
+				if key.lower() == data_label.lower():
 					match = True
 					break
 			# If only one false match the data doesn't validate
@@ -309,7 +335,59 @@ class Model:
 			validate = True
 		
 		return validate
+
+	def validate_shipment_data(self, file_path, data_pattern, pattern_match):
+
+		# 'shipment_data': {
+		# 	'rows': 2,
+		# 	'cols': 3,
+		# 	'orientation': 'cols',
+		# 	'fixed': None,
+		# 	'data_labels': ['sku', 'total boxes', 'total units', 'box id']
+		# }
+
+		data_labels_array = data_pattern['data_labels']
+		# This can be used in the future for flexible validation of data by
+		# rows or by columns
+		# orientation = data_pattern['orientation']
+
+		# Initialize data_labels match to False
+		validate = False
+		data_header_row = []
+
+		start_index = pattern_match['indices'][0]
+
+		with open(file_path, 'r', encoding='utf-8-sig', newline='') as file:
+
+			reader = csv.reader(file)
+			for index, row in enumerate(reader):
+				
+				# Trim row of any trailing commas
+				row = self.trim_trailing_empty_cells(row)
+				if index == start_index:
+					for cell in row:
+						data_header_row.append(cell.strip())
+					break
+				else:
+					pass
+
+		# Loop through all the data_labels
+		for data_label in data_labels_array:
+			match = False
+			# Loop through the keys to see if there is a match
+			for key in data_header_row:
+				if key.lower() == data_label.lower():
+					match = True
+					break
+			# If only one false match the data doesn't validate
+			if match == False:
+				break
+		# If the last match is true the data must validate
+		if match == True:
+			validate = True
 		
+		return validate
+
 
 	def read_shipment_details(self, file_path, data_pattern):
 
@@ -351,6 +429,117 @@ class Model:
 
 
 	##############  MODEL METHODS  ##################
+	def verify_data_match(self):
+
+		shipment_data = self.get_shipment_data()
+		shipment_labels_path = self.get_pdf_record().get_path()
+
+		with open(shipment_labels_path, 'rb') as file:
+			shipment_labels = PdfReader(file)
+
+			# Box quantity verification check
+			# Shipment details from the model
+			shipment_details_data = self.get_shipment_details()
+			if int(shipment_details_data['Boxes']) != int(len(shipment_labels.pages) / 2):
+			# if int(shipment_details['Boxes']) != int(len(shipment_labels.pages) / 2):
+				print("Box counts do not match")
+			else:
+				print("Box counts match")
+
+			# Sort shipment data by box ID
+			sorted_data = shipment_data.sort_values(by='Box ID')
+
+			# Set index for the pdf labels file
+			pdf_page_index = 0
+
+			for _, row in sorted_data.iterrows():
+				box_id = row['Box ID']
+				sku = row['SKU']
+
+				# Extract the text from the pdf
+				text_page = shipment_labels.pages[pdf_page_index].extract_text()
+
+				# Increment the index by 2 to skip over the shipping label
+				pdf_page_index += 2
+
+				if str(box_id) not in text_page or sku not in text_page:
+					print(f"Mismatch found for Box ID {box_id} and SKU {sku}")
+					return False
+
+			# All checks pass 
+			return True
+
+
+	def split_shipment_labels(self):
+
+		shipment_data = self.get_shipment_data()
+		shipment_labels_path = self.get_pdf_record().get_path()
+
+		with open(shipment_labels_path, 'rb') as file:
+			shipment_labels = PdfReader(file)
+
+			# Sort shipment data by box ID
+			sorted_data = shipment_data.sort_values(by='Box ID')
+
+			# Set page index for pdf labels file
+			pdf_page_index = 0
+
+			# Set current sku
+			current_sku = None
+
+			writer = PdfWriter()
+			for _, row in sorted_data.iterrows():
+				sku = row['SKU']
+
+				if not current_sku:
+					# Just started reading, set up for new pdf file
+					current_sku = sku
+
+				elif current_sku and (current_sku != sku):
+					# New sku set reached, write out current pdfs pages to file
+					file_loc = f'files/pdfs/consolidated/{current_sku.strip()}.pdf'
+					# Write out the PDF
+					with open(file_loc, 'wb') as f:
+						writer.write(f)
+						writer.close()
+					current_sku = sku
+					writer = PdfWriter()
+
+				writer.add_page(shipment_labels.pages[pdf_page_index])
+				writer.add_page(shipment_labels.pages[pdf_page_index + 1])
+				pdf_page_index += 2
+
+			# Final file write as the loop ends
+			file_loc = f'files/pdfs/consolidated/{current_sku.strip()}.pdf'
+			with open(file_loc, 'wb') as f:
+				writer.write(f)
+				writer.close()
+	
+
+	def write_csv_to_main(self):
+
+		shipment_data = self.get_shipment_data()
+
+		# Output to the main record file
+		main_file_loc = 'files/main.csv'
+
+		if os.path.exists(main_file_loc) and os.path.getsize(main_file_loc) > 0:
+			try:
+				existing_data = pd.read_csv(main_file_loc)
+				updated_data = pd.concat([existing_data, shipment_data])
+				sorted_data = updated_data.sort_values(by=['SKU', 'Date', 'Shipment ID'])
+				sorted_data.to_csv(main_file_loc, index=False)
+			except pd.errors.EmptyDataError:
+				sorted_data = shipment_data.sort_values(by=['SKU', 'Date', 'Shipment ID'])
+				sorted_data.to_csv(main_file_loc, index=False)
+		else:
+			sorted_data = shipment_data.sort_values(by=['SKU', 'Date', 'Shipment ID'])
+			sorted_data.to_csv(main_file_loc, index=False)
+
+
+	# Heavy lifting method that reads in the csv file, matches patterns to
+	# locate the data, creates the dataframe (future: split off) and stores in
+	# the model
 	def read_csv(self):
 
 		file_path = self.get_csv_record().get_path()
@@ -364,6 +553,7 @@ class Model:
 		pattern_match = self.find_pattern_match(self.get_one_pattern('shipment_details'), self.get_data_patterns())
 
 		# Pull the data according to the matched pattern
+		# Returns a dictionary
 		data_details = self.read_shipment_details(file_path, pattern_match)
 
 		# Validate the data matches expected key details
@@ -373,13 +563,67 @@ class Model:
 		if validate_check:
 			self.set_shipment_details(data_details)
 
+		# Find pattern match for the shipment data
+		pattern_match = self.find_pattern_match(self.get_one_pattern('shipment_data'), self.get_data_patterns())
+
+		# Test print to see what pattern_match is
+		# print(f"Pattern match: {pattern_match}")
+
+		# Validate shipment data
+		validate_check = self.validate_shipment_data(file_path, self.get_one_pattern('shipment_data'), pattern_match)
+
+		# If validation passes grab the start index for the shipment_data dataframe
+		if validate_check:
+			table_start_index = pattern_match['indices'][0]
+
+		######################################################################
+		############   START OF THE COPIED CODE FROM APP READ_CSV  ###########
+		######################################################################
+
+		# Read the data into a pandas dataframe
+		table_data = pd.read_csv(file_path, skiprows=table_start_index)
+
+		# Store the dataframe into the model
+		# Except this line - this isn't copied code
+		self.set_shipment_data(table_data)
+
+		mask = table_data['Box ID'].str.contains(',') & (table_data['Total units'] > 1)
+		multi_shipment_rows = table_data[mask].copy()
+
+		multi_shipment_rows['Box ID'] = multi_shipment_rows['Box ID'].str.split(',')
+		exploded_rows = multi_shipment_rows.explode('Box ID')
+		exploded_rows['Total units'] = 1
+
+		table_data = pd.concat([table_data[~mask], exploded_rows])
+
+		# Shipment details from the model
+		shipment_details_data = self.get_shipment_details()
+		shipment_id = shipment_details_data['Shipment ID']
+		shipment_name = shipment_details_data['Shipment name']
+
+		# Parse the date
+		date_match = re.search(r'\((\d{2}/\d{2}/\d{4})', shipment_name)
+		date_str = date_match.group(1) if date_match else ''
+
+		if date_str:
+			date_obj = datetime.strptime(date_str, "%d/%m/%Y")
+			formatted_date = date_obj.strftime("%m/%d/%Y")
+		else:
+			formatted_date = None
+
+		table_data['Shipment ID'] = shipment_id
+		table_data['Date'] = formatted_date
+
+		self.set_shipment_data(table_data)
+		print("Shipment data read successful")
+
 
 
 if __name__ == '__main__':
 	model = Model()
 
 	# Set file paths for testing
-	test_csv_path = "C:/Users/lange/Downloads/FBA17FD3Y0G2-TESTING.csv"
+	test_csv_path = "C:/Users/lange/Downloads/FBA17FD3Y0G2.csv"
 	test_pdf_path = "C:/Users/lange/Downloads/package-FBA17FD3Y0G2.pdf"
 
 	# Set CSV and PDF records for testing
