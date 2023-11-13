@@ -3,6 +3,7 @@
 ##########################
 
 from .db_manager import DBManager
+from .pdf_manager import PDFManager
 from .record_types import PDFRecord, CSVRecord
 import csv
 import pandas as pd
@@ -36,6 +37,9 @@ class Model:
 		self._db.connect()
 		self._db.setup_tables()
 		self._db.close()
+
+	# Initialize the PDF Manager
+	pdf_mgr = PDFManager('files/pdfs/')
 
 	# Set up the data patterns
 	def initialize_patterns(self):
@@ -481,39 +485,43 @@ class Model:
 			# Sort shipment data by box ID
 			sorted_data = shipment_data.sort_values(by='Box ID')
 
+			# A dictionary to store the sku(key) and a page range tuple
+			sku_pages = {}
+
 			# Set page index for pdf labels file
-			pdf_page_index = 0
+			page_start_index = 0
+			page_end_index = 0
 
 			# Set current sku
 			current_sku = None
 
-			writer = PdfWriter()
 			for _, row in sorted_data.iterrows():
-				sku = row['SKU']
+				sku = row['SKU'].strip()
 
 				if not current_sku:
-					# Just started reading, set up for new pdf file
+					# Just started reading
 					current_sku = sku
 
 				elif current_sku and (current_sku != sku):
-					# New sku set reached, write out current pdfs pages to file
-					file_loc = f'files/pdfs/consolidated/{current_sku.strip()}.pdf'
-					# Write out the PDF
-					with open(file_loc, 'wb') as f:
-						writer.write(f)
-						writer.close()
+					# New sku set reached, store the data in the sku pages dict
+					sku_pages[current_sku] = (page_start_index, page_end_index)
+					page_start_index = page_end_index
 					current_sku = sku
-					writer = PdfWriter()
 
-				writer.add_page(shipment_labels.pages[pdf_page_index])
-				writer.add_page(shipment_labels.pages[pdf_page_index + 1])
-				pdf_page_index += 2
+				page_end_index += 2
 
-			# Final file write as the loop ends
-			file_loc = f'files/pdfs/consolidated/{current_sku.strip()}.pdf'
-			with open(file_loc, 'wb') as f:
-				writer.write(f)
-				writer.close()
+			# Final record as the loop breaks
+			sku_pages[current_sku] = (page_start_index, page_end_index)
+
+		############### REFACTOR TO A MERGE PAGES METHOD ##########
+		# Right now this only works to set active labels. Would be way more
+		# flexible if it were in a method that could be used for both active
+		# and archived labels
+		for pages_set in sku_pages:
+			self.pdf_mgr.process_pdf_pages(
+				shipment_labels_path,
+				pages_set, True, sku_pages[pages_set])	
+
 	
 
 	def write_csv_to_main(self):

@@ -25,7 +25,7 @@ class ShipShapeFBA:
 		msg = record.get_basename()
 
 		return msg
-		
+
 
 	# Function for processing the loaded files
 	def process_files(self):
@@ -39,6 +39,7 @@ class ShipShapeFBA:
 
 			# Split the labels and store by sku
 			self.model.split_shipment_labels()
+
 
 			# Write out the organized csv
 			self.model.write_csv_to_main()
