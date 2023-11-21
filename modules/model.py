@@ -5,6 +5,7 @@
 from .db_manager import DBManager
 from .pdf_manager import PDFManager
 from .record_types import PDFRecord, CSVRecord
+from .schema_translator import SchemaTranslator
 import csv
 import pandas as pd
 from PyPDF2 import PdfWriter, PdfReader
@@ -14,7 +15,7 @@ import os
 
 
 class Model:
-	def __init__(self):
+	def __init__(self, config):
 		self._files = [None, None]
 		self._db = None
 		self._patterns = None
@@ -26,14 +27,14 @@ class Model:
 		self._shipment_data = None
 		self._shipment_labels = None
 		if not self._db:
-			self.initialize_db()
+			self.initialize_db(config['database'])
 		if not self._patterns:
 			self.initialize_patterns()
 
 
 	# Set up the database
-	def initialize_db(self):
-		self._db = DBManager('app/shipshape.db')
+	def initialize_db(self, database):
+		self._db = DBManager(database['path'])
 		self._db.connect()
 		self._db.setup_tables()
 		self._db.close()

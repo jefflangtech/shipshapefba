@@ -1,0 +1,50 @@
+{
+  "tables": {
+    "shipments": {
+      "columns": {
+        "shipment_id": "string",
+        "shipment_name": "string",
+        "ship_to": "string",
+        "boxes": "number",
+        "skus": "number",
+        "units": "number",
+        "timestamp": "datetime"
+      },
+      "primary_key": ["shipment_id"]
+    },
+    "line_items": {
+      "columns": {
+        "id": "number",
+        "shipment_id": "string",
+        "sku": "string",
+        "asin": "string",
+        "fnsku": "string",
+        "box_id": "string",
+        "pdf_hash": "string",
+        "distributed_on": "datetime",
+        "workorder_id": "string",
+        "active_pdf_path": "string",
+        "archived_pdf_path": "string"
+      },
+      "primary_key": ["id"],
+      "auto_increment": ["id"],
+      "foreign_keys": {
+        "shipment_id": "shipments (shipment_id)"
+      }
+    },
+    "csv_archives": {
+      "columns": {
+        "id": "number",
+        "shipment_id": "string",
+        "file_name": "string",
+        "csv_blob": "binary",
+        "archived_on": "datetime"
+      },
+      "primary_key": ["id"],
+      "auto_increment": ["id"],
+      "foreign_keys": {
+        "shipment_id": "shipments (shipment_id)"
+      }
+    }
+  }
+}

@@ -4,13 +4,15 @@
 
 from modules.model import Model
 from modules.view import View
+from modules.config_loader import load_config
 import os
 
 
 class ShipShapeFBA:
 
 	def __init__(self):
-		self.model = Model()
+		self.config = load_config()
+		self.model = Model(self.config)
 		self.view = View(self)
 
 	def update_record(self, file_path):

@@ -18,7 +18,6 @@ class DBManager:
 		# Database table structure - shipment table
 		self.cursor.execute(''' CREATE TABLE IF NOT EXISTS shipments (
 			shipment_id TEXT PRIMARY KEY,
-			workflow_name TEXT,
 			shipment_name TEXT,
 			ship_to TEXT,
 			boxes INTEGER,
