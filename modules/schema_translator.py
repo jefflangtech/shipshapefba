@@ -15,16 +15,19 @@ class SchemaTranslator:
 			"binary": "BLOB"
 		}
 
+	# Load the schema JSON file
 	def load_schema(self, file_path):
 		with open(file_path, 'r') as file:
 			schema = json.load(file)
 		return schema
 
 
+	# Translate the generic scheme type using the database specific type map
 	def translate_type(self, type_map, generic_type):
 		return type_map.get(generic_type, "TEXT")
 
 
+	# Generate Sqlite3 database initialization statements
 	def translate_sqlite(self):
 		type_map = self.sqlite_type_mapping
 

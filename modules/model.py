@@ -2,7 +2,7 @@
 ###     MODEL CLASS    ###
 ##########################
 
-from .db_manager import DBManager
+from .sqlite_manager import SqliteManager
 from .pdf_manager import PDFManager
 from .record_types import PDFRecord, CSVRecord
 from .schema_translator import SchemaTranslator
@@ -18,6 +18,7 @@ class Model:
 	def __init__(self, config):
 		self._files = [None, None]
 		self._db = None
+		self._db_schema = SchemaTranslator(config['database']['schema_path'])
 		self._patterns = None
 		# Attributes for the csv data scan
 		self._data_patterns = None
@@ -34,7 +35,7 @@ class Model:
 
 	# Set up the database
 	def initialize_db(self, database):
-		self._db = DBManager(database['path'])
+		self._db = SqliteManager(database['path'], self._db_schema)
 		self._db.connect()
 		self._db.setup_tables()
 		self._db.close()
