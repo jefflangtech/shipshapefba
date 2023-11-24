@@ -2,11 +2,8 @@ import json
 
 class SchemaTranslator:
 
-	def __init__(self, schema_path, schema_definition=None):
+	def __init__(self, schema_definition):
 		self._schema_definition = schema_definition
-		self._schema_path = schema_path
-		if not self._schema_definition:
-			self._schema_definition = self.load_schema(self._schema_path)
 
 		self.sqlite_type_mapping = {
 			"number": "INTEGER",
@@ -14,12 +11,6 @@ class SchemaTranslator:
 			"datetime": "DATETIME",
 			"binary": "BLOB"
 		}
-
-	# Load the schema JSON file
-	def load_schema(self, file_path):
-		with open(file_path, 'r') as file:
-			schema = json.load(file)
-		return schema
 
 
 	# Translate the generic scheme type using the database specific type map

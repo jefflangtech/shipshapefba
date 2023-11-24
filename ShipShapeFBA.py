@@ -5,6 +5,10 @@
 from modules.model import Model
 from modules.view import View
 from modules.config_loader import load_config
+from modules.schema_translator import SchemaTranslator
+from modules.schema import SchemaLoader, FileSchemaLoader, APISchemaLoader
+from modules.sqlite_manager import SqliteManager
+from modules.utils import Utils as utils
 import os
 
 
@@ -27,6 +31,40 @@ class ShipShapeFBA:
 		msg = record.get_basename()
 
 		return msg
+
+
+	def configure_db_schema(self, path):
+
+		# Select API or local File loaders
+		if utils.is_remote_path(path):
+			schema_data = APISchemaLoader(path)
+
+		elif utils.is_local_path(path):
+			schema_data = FileSchemaLoader(path)
+
+		schema_loader = SchemaLoader(schema_data)
+		schema = schema_loader.load_and_validate_schema()
+
+		return schema
+
+
+	def configure_application(self):
+
+		# Database configuration
+		db_config = self.config['database']
+
+		# Get the schema
+		schema = self.configure_db_schema(db_config['schema_path'])
+
+		# Configure schema translator
+		schema_translator = SchemaTranslator(schema)
+
+		# Configure database
+		db = SqliteManager(db_config['path'], schema_translator)
+		db.connect()
+		db.setup_tables()
+		db.close()
+		
 
 
 	# Function for processing the loaded files
@@ -60,4 +98,5 @@ class ShipShapeFBA:
 
 # Run the app!
 app = ShipShapeFBA()
+app.configure_application()
 app.run()

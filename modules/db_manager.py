@@ -17,4 +17,4 @@ class DBManager(ABC):
 
 	@abstractmethod
 	def setup_tables(self):
-		pass
+		pass 
