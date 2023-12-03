@@ -1,5 +1,7 @@
 from PyPDF2 import PdfReader, PdfWriter, PdfMerger
 import os
+from io import BytesIO
+import hashlib
 
 # PDF File Manager Class
 class PDFManager:
@@ -77,6 +79,31 @@ class PDFManager:
 			new_pdf_path = self.get_file_path(sku, is_active)
 			pdf_merger.write(new_pdf_path)
 			pdf_merger.close()
+
+
+	def generate_pdf_hash(self, pages):
+		
+		writer = PdfWriter()
+
+		# # Get binary data from the text
+		# text_data = pages[0].encode()
+
+		# # Get binary data from the shipping label page
+		# writer.add_page(pages[1])
+
+		for page in pages:
+			writer.add_page(page)
+
+		with BytesIO() as bytes_stream:
+			writer.write(bytes_stream)
+			page_data = bytes_stream.getvalue()
+
+		# combined_data = text_data + image_page_data
+
+		hash_object = hashlib.sha256()
+		hash_object.update(page_data)
+
+		return hash_object.hexdigest()
 
 
 if __name__ == '__main__':

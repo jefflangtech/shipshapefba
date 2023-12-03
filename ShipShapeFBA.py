@@ -18,6 +18,7 @@ class ShipShapeFBA:
 		self.config = load_config()
 		self.model = Model(self.config)
 		self.view = View(self)
+		self.db = None
 
 	def update_record(self, file_path):
 
@@ -48,7 +49,7 @@ class ShipShapeFBA:
 		return schema
 
 
-	def configure_application(self):
+	def configure_db(self):
 
 		# Database configuration
 		db_config = self.config['database']
@@ -56,15 +57,18 @@ class ShipShapeFBA:
 		# Get the schema
 		schema = self.configure_db_schema(db_config['schema_path'])
 
-		# Configure schema translator
-		schema_translator = SchemaTranslator(schema)
-
 		# Configure database
-		db = SqliteManager(db_config['path'], schema_translator)
+		db = SqliteManager(db_config['path'], SchemaTranslator(schema))
 		db.connect()
 		db.setup_tables()
 		db.close()
-		
+
+		return db
+
+
+	def configure_application(self):
+
+		self.db = self.configure_db()
 
 
 	# Function for processing the loaded files
@@ -79,7 +83,6 @@ class ShipShapeFBA:
 
 			# Split the labels and store by sku
 			self.model.split_shipment_labels()
-
 
 			# Write out the organized csv
 			self.model.write_csv_to_main()

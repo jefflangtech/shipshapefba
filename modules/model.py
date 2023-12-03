@@ -11,6 +11,9 @@ import re
 from datetime import datetime
 import os
 
+from io import BytesIO
+import hashlib
+
 
 class Model:
 	def __init__(self, config):
@@ -447,22 +450,38 @@ class Model:
 			# Set index for the pdf labels file
 			pdf_page_index = 0
 
-			for _, row in sorted_data.iterrows():
+			for data_index, row in sorted_data.iterrows():
 				box_id = row['Box ID']
 				sku = row['SKU']
 
 				# Extract the text from the pdf
 				text_page = shipment_labels.pages[pdf_page_index].extract_text()
 
-				# Increment the index by 2 to skip over the shipping label
-				pdf_page_index += 2
-
 				if str(box_id) not in text_page or sku not in text_page:
 					print(f"Mismatch found for Box ID {box_id} and SKU {sku}")
 					return False
+				else:
+					hash_pages = []
+					# hash_pages.append(text_page)
+					hash_pages.append(shipment_labels.pages[pdf_page_index])
+					hash_pages.append(shipment_labels.pages[pdf_page_index + 1])
 
-			# All checks pass 
-			return True
+					hash = self.pdf_mgr.generate_pdf_hash(hash_pages)
+		
+					# text_data = text_page.encode()
+					# hash_object = hashlib.sha256()
+					# hash_object.update(text_data)
+					# hash = hash_object.hexdigest()
+
+					sorted_data.at[data_index, 'pdf_hash'] = hash
+
+				# Increment the index by 2 to skip over the shipping label
+				pdf_page_index += 2
+
+		self.set_shipment_data(sorted_data)
+
+		# All checks pass 
+		return True
 
 
 	def split_shipment_labels(self):
@@ -575,15 +594,10 @@ class Model:
 		if validate_check:
 			table_start_index = pattern_match['indices'][0]
 
-		######################################################################
-		############   START OF THE COPIED CODE FROM APP READ_CSV  ###########
-		######################################################################
-
 		# Read the data into a pandas dataframe
 		table_data = pd.read_csv(file_path, skiprows=table_start_index)
 
 		# Store the dataframe into the model
-		# Except this line - this isn't copied code
 		self.set_shipment_data(table_data)
 
 		mask = table_data['Box ID'].str.contains(',') & (table_data['Total units'] > 1)
@@ -612,6 +626,10 @@ class Model:
 
 		table_data['Shipment ID'] = shipment_id
 		table_data['Date'] = formatted_date
+		table_data['pdf_hash'] = ''
+
+		# Re-index the table after exploding rows and concatenating
+		table_data = table_data.reset_index(drop=True)
 
 		self.set_shipment_data(table_data)
 		print("Shipment data read successful")
@@ -622,8 +640,8 @@ if __name__ == '__main__':
 	model = Model()
 
 	# Set file paths for testing
-	test_csv_path = "C:/Users/lange/Downloads/FBA17FD3Y0G2.csv"
-	test_pdf_path = "C:/Users/lange/Downloads/package-FBA17FD3Y0G2.pdf"
+	test_csv_path = ""
+	test_pdf_path = ""
 
 	# Set CSV and PDF records for testing
 	model.set_csv_record(test_csv_path)
